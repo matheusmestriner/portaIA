@@ -1,4 +1,4 @@
-# PortariaFlow
+# PortalIA
 
 MVP SaaS multi-condomínio para portaria inteligente com entregas, moradores, câmeras, mosaico, acessos, auditoria e WhatsApp via provider desacoplado.
 
