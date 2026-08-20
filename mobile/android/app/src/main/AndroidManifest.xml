@@ -1,0 +1,51 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Telecom self-managed: sem MANAGE_OWN_CALLS, addNewIncomingCall lança
+         SecurityException. POST_NOTIFICATIONS é exigida a partir do Android 13
+         para qualquer notificação (inclusive a de chamada recebida). -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Recebe o push de alta prioridade que acorda o app com a tela
+             desligada. Inerte até existir um google-services.json real e o
+             plugin com.google.gms.google-services aplicado — ver
+             docs/mobile/SIP_PUSH.md. -->
+        <service
+            android:name=".push.PortaliaMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- ConnectionService self-managed: é o que dá ao app a UI nativa de
+             chamada do sistema sem precisar virar o discador padrão. -->
+        <service
+            android:name="com.portalia.core.sip.PortaliaConnectionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.ConnectionService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

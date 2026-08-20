@@ -1,0 +1,9 @@
+import type { AlarmEvent, AlarmPanel, Camera, SecurityLicense, VmsServer } from '@prisma/client';
+
+const date = (value: Date | null) => value?.toISOString() ?? null;
+
+export const toVmsServerResponse = (value: VmsServer) => ({ id: value.id, condominiumId: value.condominiumId, name: value.name, provider: value.provider, endpoint: value.endpoint, connectionStatus: value.connectionStatus, lastCheckedAt: date(value.lastCheckedAt), createdAt: value.createdAt.toISOString() });
+export const toCameraResponse = (value: Camera) => ({ id: value.id, condominiumId: value.condominiumId, vmsServerId: value.vmsServerId, name: value.name, location: value.location, externalId: value.externalId, status: value.status, isActive: value.isActive, lastSeenAt: date(value.lastSeenAt), createdAt: value.createdAt.toISOString() });
+export const toAlarmPanelResponse = (value: AlarmPanel) => ({ id: value.id, condominiumId: value.condominiumId, vmsServerId: value.vmsServerId, name: value.name, provider: value.provider, externalId: value.externalId, status: value.status, lastSeenAt: date(value.lastSeenAt), createdAt: value.createdAt.toISOString() });
+export const toAlarmEventResponse = (value: AlarmEvent) => ({ id: value.id, condominiumId: value.condominiumId, alarmPanelId: value.alarmPanelId, cameraId: value.cameraId, type: value.type, status: value.status, message: value.message, sourceEventId: value.sourceEventId, occurredAt: value.occurredAt.toISOString(), acknowledgedAt: date(value.acknowledgedAt), resolvedAt: date(value.resolvedAt), createdAt: value.createdAt.toISOString() });
+export const toSecurityLicenseResponse = (value: SecurityLicense) => ({ id: value.id, condominiumId: value.condominiumId, feature: value.feature, quantity: value.quantity, expiresAt: date(value.expiresAt), createdAt: value.createdAt.toISOString(), updatedAt: value.updatedAt.toISOString() });

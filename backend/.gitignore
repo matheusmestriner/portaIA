@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+# Covers .env, .env.local, .env.production, .env.test, etc. — the literal
+# ".env" alone doesn't catch any of those variants, and they're exactly the
+# files people create for local/environment-specific secrets.
+.env
+.env.*
+!.env.example
+*.log
+
+# Fotos operacionais gravadas localmente
+storage/
