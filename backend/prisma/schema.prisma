@@ -1,0 +1,1113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// Tenancy hierarchy: Resale (Revenda) -> Client (Cliente) -> Condominium
+// Isolation is enforced in two layers:
+//   1. Application layer: every use case resolves tenant scope from the
+//      authenticated session, never from client-supplied payload.
+//   2. Database layer: Row-Level Security policies (see migration SQL) keyed
+//      on the Postgres session vars app.tenant_resale_id / app.tenant_client_id /
+//      app.tenant_condominium_id, set per-request via PrismaService.withTenantContext.
+//      A NULL session var means "no restriction at this level" (used by
+//      super admins and, one level down, by resale/client admins).
+// -----------------------------------------------------------------------------
+
+enum UserRole {
+  SUPER_ADMIN
+  RESALE_ADMIN
+  RESALE_OPERATOR
+  CLIENT_ADMIN
+  CLIENT_OPERATOR
+  CONDO_MANAGER
+  CONDO_OPERATOR
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+enum FeatureFlagScope {
+  GLOBAL
+  RESALE
+  CLIENT
+  CONDOMINIUM
+}
+
+model Resale {
+  id        String   @id @default(uuid())
+  planId    String?  @map("plan_id")
+  name      String
+  slug      String   @unique
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  plan    Plan?    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  clients Client[]
+  users   User[]
+
+  @@index([planId])
+  @@map("resales")
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  resaleId  String   @map("resale_id")
+  name      String
+  slug      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  resale       Resale        @relation(fields: [resaleId], references: [id], onDelete: Restrict)
+  condominiums Condominium[]
+  users        User[]
+
+  @@unique([resaleId, slug])
+  @@index([resaleId])
+  @@map("clients")
+}
+
+model Condominium {
+  id        String   @id @default(uuid())
+  resaleId  String   @map("resale_id")
+  clientId  String   @map("client_id")
+  name      String
+  slug      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  client              Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  users               User[]
+  units               Unit[]
+  vehicles            Vehicle[]
+  providers           Provider[]
+  occurrences         Occurrence[]
+  panicAlerts         PanicAlert[]
+  blockListEntries    BlockListEntry[]
+  announcements       Announcement[]
+  consents            Consent[]
+  dataSubjectRequests DataSubjectRequest[]
+  legalHolds          LegalHold[]
+  extensions          Extension[]
+  calls               Call[]
+  recordings          Recording[]
+  operationalPhotos   OperationalPhoto[]
+  vmsServers          VmsServer[]
+  cameras             Camera[]
+  alarmPanels         AlarmPanel[]
+  alarmEvents         AlarmEvent[]
+  securityLicenses    SecurityLicense[]
+
+  @@unique([clientId, slug])
+  @@index([resaleId])
+  @@index([clientId])
+  @@map("condominiums")
+}
+
+// -----------------------------------------------------------------------------
+// Núcleo condominial. resaleId/clientId/condominiumId são denormalizados em
+// toda a subárvore (mesmo padrão de Condominium) para que a RLS continue
+// sendo uma checagem direta de coluna, sem subqueries. Um trigger mantém a
+// consistência com o ancestral real (ver migration).
+// -----------------------------------------------------------------------------
+
+model Unit {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  identifier    String // ex.: "101", "Bloco A - 202"
+  block         String?
+  floor         String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  residents   Resident[]
+  vehicles    Vehicle[]
+  visitors    Visitor[]
+  deliveries  Delivery[]
+  keyRecords  KeyRecord[]
+  extension   Extension?
+
+  @@unique([condominiumId, identifier])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("units")
+}
+
+model Resident {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  unitId        String   @map("unit_id")
+  name          String
+  email         String?  @unique
+  phone         String?
+  isPrimary     Boolean  @default(true) @map("is_primary")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Login do app do morador. Ator inteiramente à parte de `User`/`UserRole`
+  // (ver backend/src/resident-auth) — um morador nunca "gerencia" nada, só
+  // enxerga a própria unidade, então não se encaixa na hierarquia de 4
+  // profundidades (ROLE_DEPTH) pensada para equipe. `email` vira único acima
+  // para servir de login; Postgres permite múltiplos NULL, então moradores
+  // sem e-mail cadastrado continuam existindo, só não conseguem logar ainda.
+  passwordHash        String?   @map("password_hash")
+  mustChangePassword  Boolean   @default(true) @map("must_change_password")
+  lastLoginAt         DateTime? @map("last_login_at")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  lastFailedLoginAt   DateTime? @map("last_failed_login_at")
+  passwordChangedAt   DateTime? @map("password_changed_at")
+
+  unit          Unit                   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  refreshTokens ResidentRefreshToken[]
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([unitId])
+  @@map("residents")
+}
+
+// Espelha RefreshToken (equipe), mas para o ator `Resident`. Ver
+// backend/src/resident-auth/use-cases/resident-refresh-tokens.use-case.ts —
+// mesma rotação + revogação-em-reuso, porém o token é enviado pelo app no
+// corpo da requisição (não em cookie), já que o cliente é nativo, não browser.
+model ResidentRefreshToken {
+  id            String    @id @default(uuid())
+  residentId    String    @map("resident_id")
+  tokenHash     String    @unique @map("token_hash")
+  resaleId      String?   @map("resale_id")
+  clientId      String?   @map("client_id")
+  condominiumId String?   @map("condominium_id")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  replacedById  String?   @map("replaced_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  resident Resident @relation(fields: [residentId], references: [id], onDelete: Cascade)
+
+  @@index([residentId])
+  @@index([expiresAt])
+  @@map("resident_refresh_tokens")
+}
+
+model Vehicle {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  unitId        String   @map("unit_id")
+  plate         String
+  model         String?
+  color         String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  unit        Unit        @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@unique([condominiumId, plate])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([unitId])
+  @@map("vehicles")
+}
+
+model Provider {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  name          String
+  document      String // CPF ou CNPJ
+  company       String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@unique([condominiumId, document])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("providers")
+}
+
+// -----------------------------------------------------------------------------
+// Portaria e Acessos / Segurança. Same denormalized resale/client/condominium
+// pattern as the condominial core, so RLS stays a direct column check.
+// -----------------------------------------------------------------------------
+
+enum VisitorAuthorizationStatus {
+  PENDING
+  APPROVED
+  DENIED
+  EXPIRED
+  USED
+}
+
+model Visitor {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  unitId        String   @map("unit_id")
+  name          String
+  document      String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  unit           Unit                   @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  authorizations VisitorAuthorization[]
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([unitId])
+  @@map("visitors")
+}
+
+model VisitorAuthorization {
+  id            String                     @id @default(uuid())
+  resaleId      String                     @map("resale_id")
+  clientId      String                     @map("client_id")
+  condominiumId String                     @map("condominium_id")
+  visitorId     String                     @map("visitor_id")
+  status        VisitorAuthorizationStatus @default(PENDING)
+  validFrom     DateTime                   @map("valid_from")
+  validUntil    DateTime                   @map("valid_until")
+  usedAt        DateTime?                  @map("used_at")
+  createdAt     DateTime                   @default(now()) @map("created_at")
+  updatedAt     DateTime                   @updatedAt @map("updated_at")
+
+  visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([visitorId])
+  @@map("visitor_authorizations")
+}
+
+enum DeliveryStatus {
+  PENDING
+  COLLECTED
+  RETURNED
+}
+
+model Delivery {
+  id            String         @id @default(uuid())
+  resaleId      String         @map("resale_id")
+  clientId      String         @map("client_id")
+  condominiumId String         @map("condominium_id")
+  unitId        String         @map("unit_id")
+  residentId    String?        @map("resident_id")
+  description   String
+  carrier       String?
+  courierName   String?        @map("courier_name")
+  trackingCode  String?        @map("tracking_code")
+  volumeCount   Int            @default(1) @map("volume_count")
+  status        DeliveryStatus @default(PENDING)
+  // Foto do ato: uma no recebimento, outra na retirada. Guardadas como
+  // referência a OperationalPhoto (não como URL solta) para que a evidência
+  // fique no mesmo trilho de auditoria/retenção do resto do sistema.
+  receiptPhotoId String?       @map("receipt_photo_id")
+  pickupPhotoId  String?       @map("pickup_photo_id")
+  receivedAt    DateTime       @default(now()) @map("received_at")
+  collectedAt   DateTime?      @map("collected_at")
+  pickedUpBy    String?        @map("picked_up_by")
+  pickupDocument String?       @map("pickup_document")
+  // Credencial de retirada: o código numérico e o token do QR nunca são
+  // persistidos em claro — só o HMAC. last4 existe apenas para a portaria
+  // conferir visualmente qual credencial o morador está apresentando.
+  pickupCodeHash          String?   @map("pickup_code_hash")
+  pickupCodeLast4         String?   @map("pickup_code_last4")
+  pickupQrHash            String?   @map("pickup_qr_hash")
+  pickupCredentialExpires DateTime? @map("pickup_credential_expires_at")
+  pickupCredentialUsedAt  DateTime? @map("pickup_credential_used_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  unit         Unit              @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  receiptPhoto OperationalPhoto? @relation("DeliveryReceiptPhoto", fields: [receiptPhotoId], references: [id], onDelete: SetNull)
+  pickupPhoto  OperationalPhoto? @relation("DeliveryPickupPhoto", fields: [pickupPhotoId], references: [id], onDelete: SetNull)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([unitId])
+  @@index([pickupCodeHash])
+  @@index([pickupQrHash])
+  @@map("deliveries")
+}
+
+enum OperationalPhotoCategory {
+  DELIVERY_RECEIPT
+  DELIVERY_PICKUP
+  KEY_CHECKOUT
+  KEY_RETURN
+  PROVIDER_ACCESS
+  OCCURRENCE
+}
+
+/// Evidência fotográfica de um ato operacional. Os bytes ficam em um bucket
+/// (MinIO/S3) fora do Postgres — aqui guardamos só a chave do objeto e os
+/// metadados, para que a foto entre no mesmo escopo de RLS, auditoria e
+/// retenção/LGPD dos demais registros do condomínio.
+model OperationalPhoto {
+  id            String                   @id @default(uuid())
+  resaleId      String                   @map("resale_id")
+  clientId      String                   @map("client_id")
+  condominiumId String                   @map("condominium_id")
+  category      OperationalPhotoCategory
+  source        String
+  objectKey     String                   @unique @map("object_key")
+  contentType   String                   @map("content_type")
+  sizeBytes     Int                      @map("size_bytes")
+  originalName  String?                  @map("original_name")
+  capturedByUserId String?               @map("captured_by_user_id")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+
+  condominium      Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  deliveryReceipts Delivery[]  @relation("DeliveryReceiptPhoto")
+  deliveryPickups  Delivery[]  @relation("DeliveryPickupPhoto")
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([category])
+  @@map("operational_photos")
+}
+
+enum KeyRecordStatus {
+  WITH_GATEHOUSE
+  CHECKED_OUT
+}
+
+model KeyRecord {
+  id            String          @id @default(uuid())
+  resaleId      String          @map("resale_id")
+  clientId      String          @map("client_id")
+  condominiumId String          @map("condominium_id")
+  unitId        String          @map("unit_id")
+  label         String // ex.: "Chave reserva", "Controle portão"
+  status        KeyRecordStatus @default(WITH_GATEHOUSE)
+  checkedOutTo  String?         @map("checked_out_to")
+  checkedOutAt  DateTime?       @map("checked_out_at")
+  returnedAt    DateTime?       @map("returned_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  unit Unit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([unitId])
+  @@map("key_records")
+}
+
+enum OccurrenceSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum OccurrenceStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
+model Occurrence {
+  id            String             @id @default(uuid())
+  resaleId      String             @map("resale_id")
+  clientId      String             @map("client_id")
+  condominiumId String             @map("condominium_id")
+  title         String
+  description   String
+  severity      OccurrenceSeverity @default(LOW)
+  status        OccurrenceStatus   @default(OPEN)
+  reportedBy    String             @map("reported_by")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("occurrences")
+}
+
+model PanicAlert {
+  id             String    @id @default(uuid())
+  resaleId       String    @map("resale_id")
+  clientId       String    @map("client_id")
+  condominiumId  String    @map("condominium_id")
+  unitId         String?   @map("unit_id")
+  triggeredBy    String    @map("triggered_by")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  resolvedAt     DateTime? @map("resolved_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("panic_alerts")
+}
+
+model BlockListEntry {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  document      String
+  name          String?
+  reason        String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@unique([condominiumId, document])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("block_list_entries")
+}
+
+// -----------------------------------------------------------------------------
+// Comunicados e notificações. WhatsApp é só um adapter/outbox "pronto para
+// plugar" na V01 — não há integração real com um provedor (Twilio, Meta
+// Cloud API etc.), então todo NotificationOutboxEntry criado por esse canal
+// falha com um motivo explícito em vez de fingir que foi entregue. Ver
+// notifications/whatsapp.adapter.ts.
+// -----------------------------------------------------------------------------
+
+model Announcement {
+  id            String   @id @default(uuid())
+  resaleId      String   @map("resale_id")
+  clientId      String   @map("client_id")
+  condominiumId String   @map("condominium_id")
+  title         String
+  body          String
+  createdBy     String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  condominium   Condominium               @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  outboxEntries NotificationOutboxEntry[]
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("announcements")
+}
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model NotificationOutboxEntry {
+  id             String              @id @default(uuid())
+  resaleId       String              @map("resale_id")
+  clientId       String              @map("client_id")
+  condominiumId  String              @map("condominium_id")
+  announcementId String?             @map("announcement_id")
+  channel        NotificationChannel
+  recipient      String // telefone (WhatsApp), e-mail, ou userId (IN_APP)
+  status         NotificationStatus  @default(PENDING)
+  error          String?
+  attemptedAt    DateTime?           @map("attempted_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  announcement Announcement? @relation(fields: [announcementId], references: [id], onDelete: SetNull)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([announcementId])
+  @@index([status])
+  @@map("notification_outbox_entries")
+}
+
+// -----------------------------------------------------------------------------
+// Privacidade / LGPD. Nota honesta de escopo: Resident não tem campo de
+// documento (CPF) hoje, então correspondência de titular por documento só
+// funciona para Visitor/Provider/BlockListEntry (que já têm `document`).
+// Ver docs/V01_SCOPE.md para o registro dessa limitação.
+// -----------------------------------------------------------------------------
+
+model Consent {
+  id              String    @id @default(uuid())
+  resaleId        String    @map("resale_id")
+  clientId        String    @map("client_id")
+  condominiumId   String    @map("condominium_id")
+  subjectName     String    @map("subject_name")
+  subjectDocument String?   @map("subject_document")
+  purpose         String // ex.: "call_recording", "photo_capture", "data_processing"
+  granted         Boolean
+  grantedAt       DateTime? @map("granted_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([subjectDocument])
+  @@map("consents")
+}
+
+enum DataSubjectRequestType {
+  ACCESS
+  CORRECTION
+  DELETION
+  PORTABILITY
+}
+
+enum DataSubjectRequestStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+model DataSubjectRequest {
+  id                String                   @id @default(uuid())
+  resaleId          String                   @map("resale_id")
+  clientId          String                   @map("client_id")
+  condominiumId     String                   @map("condominium_id")
+  requesterName     String                   @map("requester_name")
+  requesterDocument String                   @map("requester_document")
+  type              DataSubjectRequestType
+  status            DataSubjectRequestStatus @default(OPEN)
+  details           String?
+  resolvedBy        String?                  @map("resolved_by")
+  resolutionNotes   String?                  @map("resolution_notes")
+  createdAt         DateTime                 @default(now()) @map("created_at")
+  resolvedAt        DateTime?                @map("resolved_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([requesterDocument])
+  @@index([status])
+  @@map("data_subject_requests")
+}
+
+// Blocks a DELETION request from being resolved as COMPLETED while active.
+// Deliberately does not perform any actual deletion/anonymization itself —
+// that cross-cutting data lifecycle work is out of scope for V01 (see
+// docs/V01_SCOPE.md); this model only gates the *workflow*.
+model LegalHold {
+  id              String    @id @default(uuid())
+  resaleId        String    @map("resale_id")
+  clientId        String    @map("client_id")
+  condominiumId   String    @map("condominium_id")
+  subjectDocument String    @map("subject_document")
+  reason          String
+  createdBy       String    @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  liftedAt        DateTime? @map("lifted_at")
+  liftedBy        String?   @map("lifted_by")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([subjectDocument])
+  @@map("legal_holds")
+}
+
+// -----------------------------------------------------------------------------
+// Telefonia residencial. Nenhum Asterisk/PJSIP real está conectado na V01 —
+// isso é o domínio + a API prontos para uma ponte AMI/ARI plugar (mesmo
+// espírito do adapter de WhatsApp). Ver docs/V01_SCOPE.md e
+// telephony/adapters/asterisk-webhook.guard.ts.
+// -----------------------------------------------------------------------------
+
+// Um ramal por unidade. A senha SIP é cifrada (AES-256-GCM), não hasheada —
+// precisa ser reversível para o provisionamento real do PJSIP conseguir
+// configurar o peer.
+model Extension {
+  id                   String   @id @default(uuid())
+  resaleId             String   @map("resale_id")
+  clientId             String   @map("client_id")
+  condominiumId        String   @map("condominium_id")
+  unitId               String   @unique @map("unit_id")
+  number               String
+  sipUsername          String   @map("sip_username")
+  sipPasswordEncrypted String   @map("sip_password_encrypted")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  unit          Unit        @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  outgoingCalls Call[]      @relation("CallerExtension")
+  incomingCalls Call[]      @relation("CalleeExtension")
+  Condominium   Condominium @relation(fields: [condominiumId], references: [id])
+
+  @@unique([condominiumId, number])
+  @@unique([condominiumId, sipUsername])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("extensions")
+}
+
+enum CallPartyType {
+  GATEHOUSE
+  EXTENSION
+}
+
+enum CallStatus {
+  QUEUED
+  RINGING
+  ANSWERED
+  COMPLETED
+  MISSED
+  ABANDONED
+  REJECTED
+  TIMEOUT
+}
+
+enum VmsProvider {
+  GENERIC_ONVIF
+  HIKVISION
+  DAHUA
+  INTELBRAS
+  MILESTONE
+  GENETEC
+  OTHER
+}
+
+enum VmsConnectionStatus {
+  NOT_CONFIGURED
+  OFFLINE
+  ONLINE
+  DEGRADED
+}
+
+enum CameraStatus {
+  UNKNOWN
+  ONLINE
+  OFFLINE
+  RECORDING_ERROR
+}
+
+enum AlarmPanelStatus {
+  NOT_CONFIGURED
+  ARMED
+  DISARMED
+  ALARM
+  OFFLINE
+}
+
+enum AlarmEventType {
+  INTRUSION
+  PANIC
+  TAMPER
+  FIRE
+  POWER_FAILURE
+  COMMUNICATION_FAILURE
+  OTHER
+}
+
+enum AlarmEventStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum SecurityLicenseFeature {
+  VMS
+  LPR
+  FACE_DETECTION
+  VIDEO_ANALYTICS
+}
+
+model VmsServer {
+  id               String              @id @default(uuid())
+  resaleId         String              @map("resale_id")
+  clientId         String              @map("client_id")
+  condominiumId    String              @map("condominium_id")
+  name             String
+  provider         VmsProvider         @default(GENERIC_ONVIF)
+  endpoint         String?
+  connectionStatus VmsConnectionStatus @default(NOT_CONFIGURED) @map("connection_status")
+  lastCheckedAt    DateTime?           @map("last_checked_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  cameras     Camera[]
+  alarmPanels AlarmPanel[]
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("vms_servers")
+}
+
+model Camera {
+  id            String       @id @default(uuid())
+  resaleId      String       @map("resale_id")
+  clientId      String       @map("client_id")
+  condominiumId String       @map("condominium_id")
+  vmsServerId   String?      @map("vms_server_id")
+  name          String
+  location      String?
+  externalId    String?      @map("external_id")
+  status        CameraStatus @default(UNKNOWN)
+  isActive      Boolean      @default(true) @map("is_active")
+  lastSeenAt    DateTime?    @map("last_seen_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  vmsServer   VmsServer?  @relation(fields: [vmsServerId], references: [id], onDelete: SetNull)
+  alarmEvents AlarmEvent[]
+
+  @@unique([condominiumId, externalId])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([vmsServerId])
+  @@map("cameras")
+}
+
+model AlarmPanel {
+  id            String           @id @default(uuid())
+  resaleId      String           @map("resale_id")
+  clientId      String           @map("client_id")
+  condominiumId String           @map("condominium_id")
+  vmsServerId   String?          @map("vms_server_id")
+  name          String
+  provider      VmsProvider      @default(OTHER)
+  externalId    String?          @map("external_id")
+  status        AlarmPanelStatus @default(NOT_CONFIGURED)
+  lastSeenAt    DateTime?        @map("last_seen_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  vmsServer   VmsServer?  @relation(fields: [vmsServerId], references: [id], onDelete: SetNull)
+  alarmEvents AlarmEvent[]
+
+  @@unique([condominiumId, externalId])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([vmsServerId])
+  @@map("alarm_panels")
+}
+
+model AlarmEvent {
+  id             String           @id @default(uuid())
+  resaleId       String           @map("resale_id")
+  clientId       String           @map("client_id")
+  condominiumId  String           @map("condominium_id")
+  alarmPanelId   String?          @map("alarm_panel_id")
+  cameraId       String?          @map("camera_id")
+  type           AlarmEventType
+  status         AlarmEventStatus @default(OPEN)
+  message        String
+  sourceEventId  String?          @map("source_event_id")
+  occurredAt     DateTime         @default(now()) @map("occurred_at")
+  acknowledgedAt DateTime?        @map("acknowledged_at")
+  resolvedAt     DateTime?        @map("resolved_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  alarmPanel  AlarmPanel? @relation(fields: [alarmPanelId], references: [id], onDelete: SetNull)
+  camera      Camera?     @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+
+  @@unique([condominiumId, sourceEventId])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId, status])
+  @@index([occurredAt])
+  @@map("alarm_events")
+}
+
+model SecurityLicense {
+  id            String                 @id @default(uuid())
+  resaleId      String                 @map("resale_id")
+  clientId      String                 @map("client_id")
+  condominiumId String                 @map("condominium_id")
+  feature       SecurityLicenseFeature
+  quantity      Int                    @default(0)
+  expiresAt     DateTime?              @map("expires_at")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  condominium Condominium @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+
+  @@unique([condominiumId, feature])
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("security_licenses")
+}
+
+// FIFO queue por unidade: quando uma chamada chega para um ramal já
+// ocupado (RINGING/ANSWERED), ela nasce QUEUED em vez de RINGING; ao
+// encerrar a chamada ativa daquele ramal, a mais antiga QUEUED é promovida.
+// Ver telephony/calls.service.ts — não existe uma tabela de fila separada,
+// a fila é uma leitura derivada de Call.status=QUEUED ordenada por createdAt.
+model Call {
+  id                String        @id @default(uuid())
+  resaleId          String        @map("resale_id")
+  clientId          String        @map("client_id")
+  condominiumId     String        @map("condominium_id")
+  externalCallId    String?       @unique @map("external_call_id")
+  callerType        CallPartyType @map("caller_type")
+  callerExtensionId String?       @map("caller_extension_id")
+  calleeType        CallPartyType @map("callee_type")
+  calleeExtensionId String?       @map("callee_extension_id")
+  status            CallStatus    @default(QUEUED)
+  queuedAt          DateTime?     @map("queued_at")
+  ringingAt         DateTime?     @map("ringing_at")
+  answeredAt        DateTime?     @map("answered_at")
+  endedAt           DateTime?     @map("ended_at")
+  endReason         String?       @map("end_reason")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  callerExtension Extension?  @relation("CallerExtension", fields: [callerExtensionId], references: [id], onDelete: Restrict)
+  calleeExtension Extension?  @relation("CalleeExtension", fields: [calleeExtensionId], references: [id], onDelete: Restrict)
+  recording       Recording?
+  Condominium     Condominium @relation(fields: [condominiumId], references: [id])
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@index([calleeExtensionId, status])
+  @@index([status])
+  @@map("calls")
+}
+
+// Metadados apenas — a V01 não integra armazenamento real de mídia
+// (MinIO/S3 não configurado nesta sessão). storageKey aponta para onde o
+// arquivo *deveria* estar num bucket privado quando essa integração existir.
+model Recording {
+  id              String    @id @default(uuid())
+  resaleId        String    @map("resale_id")
+  clientId        String    @map("client_id")
+  condominiumId   String    @map("condominium_id")
+  callId          String    @unique @map("call_id")
+  storageKey      String    @map("storage_key")
+  checksum        String
+  sizeBytes       Int       @map("size_bytes")
+  durationSeconds Int       @map("duration_seconds")
+  retentionUntil  DateTime? @map("retention_until")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  call        Call        @relation(fields: [callId], references: [id], onDelete: Restrict)
+  Condominium Condominium @relation(fields: [condominiumId], references: [id])
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("recordings")
+}
+
+// Anti-replay para o webhook HMAC de eventos de telefonia — não é dado de
+// tenant (não precisa de RLS), é só um dedup global por nonce, mesmo
+// espírito de IdempotencyKey.
+model WebhookNonce {
+  id        String   @id @default(uuid())
+  nonce     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("webhook_nonces")
+}
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String    @map("password_hash")
+  role               UserRole
+  resaleId           String?   @map("resale_id")
+  clientId           String?   @map("client_id")
+  condominiumId      String?   @map("condominium_id")
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  isActive           Boolean   @default(true) @map("is_active")
+  lastLoginAt        DateTime? @map("last_login_at")
+  // Bloqueio por conta contra força bruta. O rate limit do Throttler é por IP
+  // e não impede um ataque distribuído contra uma única conta; estes campos
+  // fecham essa lacuna independentemente da origem das tentativas.
+  failedLoginAttempts Int      @default(0) @map("failed_login_attempts")
+  lockedUntil        DateTime? @map("locked_until")
+  lastFailedLoginAt  DateTime? @map("last_failed_login_at")
+  passwordChangedAt  DateTime? @map("password_changed_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  resale        Resale?        @relation(fields: [resaleId], references: [id], onDelete: Restrict)
+  client        Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  condominium   Condominium?   @relation(fields: [condominiumId], references: [id], onDelete: Restrict)
+  refreshTokens RefreshToken[]
+
+  @@index([resaleId])
+  @@index([clientId])
+  @@index([condominiumId])
+  @@map("users")
+}
+
+model RefreshToken {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  tokenHash     String    @unique @map("token_hash")
+  resaleId      String?   @map("resale_id")
+  clientId      String?   @map("client_id")
+  condominiumId String?   @map("condominium_id")
+  expiresAt     DateTime  @map("expires_at")
+  revokedAt     DateTime? @map("revoked_at")
+  replacedById  String?   @map("replaced_by_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+// Effective flag for a given tenant resolves most-specific-wins:
+// CONDOMINIUM > CLIENT > RESALE > GLOBAL. scopeId is '' (not NULL) for
+// GLOBAL so the (key, scope, scopeId) unique constraint behaves predictably
+// -- Postgres treats each NULL as distinct, which would allow duplicate
+// GLOBAL rows for the same key.
+model FeatureFlag {
+  id        String           @id @default(uuid())
+  key       String
+  scope     FeatureFlagScope
+  scopeId   String           @default("") @map("scope_id")
+  enabled   Boolean          @default(false)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@unique([key, scope, scopeId])
+  @@index([key])
+  @@map("feature_flags")
+}
+
+// Same GLOBAL > RESALE > CLIENT > CONDOMINIUM resolution shape as
+// FeatureFlag (most-specific wins), so it reuses the same scope enum and
+// the same "no RLS, app-layer tenant-tree check" rationale — see
+// auth/rbac/scope-authorization.ts.
+model WhiteLabelConfig {
+  id             String           @id @default(uuid())
+  scope          FeatureFlagScope
+  scopeId        String           @default("") @map("scope_id")
+  brandName      String?          @map("brand_name")
+  tagline        String?
+  logoUrl        String?          @map("logo_url")
+  faviconUrl     String?          @map("favicon_url")
+  primaryColor   String?          @map("primary_color")
+  secondaryColor String?          @map("secondary_color")
+  // Ajustes finos de tema (cores de superfície, tipografia, raio de borda).
+  // Guardado como JSON porque é um conjunto aberto de tokens de aparência —
+  // colunas dedicadas exigiriam uma migration a cada novo token, e nada aqui
+  // é consultado/filtrado, só lido inteiro e aplicado como CSS custom props.
+  visualConfig   Json?            @map("visual_config")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  @@unique([scope, scopeId])
+  @@map("white_label_configs")
+}
+
+// Catalog of plans a Resale can be provisioned with. Deliberately just a
+// name + module list, no billing: the V01 scope excludes real payment
+// processing (see docs/V01_SCOPE.md).
+model Plan {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String
+  description String?
+  modules     String[]
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  resales Resale[]
+
+  @@map("plans")
+}
+
+// Internal replay cache for the Idempotency-Key header on critical POST
+// endpoints. Not tenant-facing data (never listed/exposed), so it does not
+// carry RLS like the domain tables — it's scoped by (key, route, actor)
+// which already prevents one actor's cached response leaking to another.
+model IdempotencyKey {
+  id             String   @id @default(uuid())
+  key            String
+  route          String
+  actorUserId    String   @map("actor_user_id")
+  responseStatus Int      @map("response_status")
+  responseBody   Json     @map("response_body")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([key, route, actorUserId])
+  @@map("idempotency_keys")
+}
+
+model AuditLog {
+  id                  String      @id @default(uuid())
+  actorUserId         String?     @map("actor_user_id")
+  actorRole           String?     @map("actor_role")
+  tenantResaleId      String?     @map("tenant_resale_id")
+  tenantClientId      String?     @map("tenant_client_id")
+  tenantCondominiumId String?     @map("tenant_condominium_id")
+  action              String
+  targetType          String      @map("target_type")
+  targetId            String?     @map("target_id")
+  result              AuditResult
+  metadata            Json?
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  @@index([tenantResaleId])
+  @@index([tenantClientId])
+  @@index([tenantCondominiumId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

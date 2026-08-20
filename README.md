@@ -1,85 +1,61 @@
-# PortalIA
+# Portalia
 
-MVP SaaS multi-condomínio para portaria inteligente com entregas, moradores, câmeras, mosaico, acessos, auditoria e WhatsApp via provider desacoplado.
+Sistema de gestão condominial, portaria e operações remotas.
 
-## Stack
-- Frontend: React + TypeScript + Vite
-- Backend: FastAPI + SQLAlchemy + PostgreSQL
-- Cache/fila: Redis (preparado)
-- Storage: MinIO/S3 compatível (preparado)
-- WhatsApp: microsserviço Go com abstração para WhatsMeow
-- Deploy local: Docker Compose
+## Estrutura
 
-## Como rodar
-```bash
-cp .env.example .env
-docker compose up --build
-```
+- `frontend`: Next.js 16, React 19 e Tailwind.
+- `backend`: NestJS, Prisma e PostgreSQL.
+- `mobile`: aplicação do morador.
+- `docs`: arquitetura e decisões do produto.
 
-Serviços:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000/docs
-- WhatsApp service: http://localhost:8081/health
-- MinIO: http://localhost:9001
+## Requisitos locais
 
-Login seed:
-- e-mail: `superadmin@portariaflow.local`
-- senha: `ChangeMe123!`
+- Node.js 20 ou superior.
+- PostgreSQL 16 ou superior.
+- npm.
 
-## Desenvolvimento local sem Docker
-Backend:
-```bash
+## Configuração local
+
+1. Copie `backend/.env.example` para `backend/.env` e configure os segredos locais.
+2. Copie `frontend/.env.example` para `frontend/.env.local`.
+3. Crie o banco PostgreSQL informado no `DATABASE_URL`.
+4. No diretório `backend`, execute `npm run prisma:generate` e `npm run prisma:migrate:deploy`.
+5. Defina `SUPER_ADMIN_BOOTSTRAP_EMAIL` e `SUPER_ADMIN_BOOTSTRAP_PASSWORD` no ambiente e execute `npm run bootstrap:super-admin` uma única vez.
+
+## Execução
+
+Em dois terminais:
+
+```powershell
 cd backend
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
-python -m app.seed
-uvicorn app.main:app --reload
+npm run start:dev
 ```
 
-Frontend:
-```bash
+```powershell
 cd frontend
-npm install
 npm run dev
 ```
 
-WhatsApp service:
-```bash
-cd services/whatsapp
-go run .
+O frontend inicia em `http://localhost:3000` e a API em `http://localhost:3101`.
+
+## Validação
+
+```powershell
+cd backend
+npm test -- --runInBand
+npm run build
 ```
 
-## Endpoints principais
-Consulte `docs/API.md` e `/docs` no FastAPI.
-
-## Checklist MVP
-- [x] Login JWT com refresh token
-- [x] RBAC por perfis
-- [x] Multi-tenancy por `tenant_id`
-- [x] CRUD de condomínios, usuários, unidades, moradores e entregas
-- [x] Upload/cadastro de foto de entrega via URL/objeto preparado para S3
-- [x] Retirada e histórico de entregas
-- [x] Notificações com `MessageProvider` e WhatsMeow adapter desacoplado
-- [x] QR/status WhatsApp
-- [x] Câmeras e mosaico básico
-- [x] Webhook genérico de controle de acesso
-- [x] Relatórios básicos
-- [x] Logs de auditoria e notificação
-- [x] Docker Compose, migrations, seeds e `.env.example`
-
-## Preparado para integração real
-- MediaMTX/FFmpeg para conversão RTSP -> HLS/WebRTC.
-- MinIO/S3 com URLs assinadas para fotos privadas.
-- WhatsMeow real: o serviço Go expõe o contrato e pontos de substituição; o cliente atual é seguro para ambiente local.
-- Cloud API/SMS/E-mail podem ser adicionados implementando `MessageProvider`.
+```powershell
+cd frontend
+npm run lint
+npm run build
+```
 
 ## Segurança
-- Senhas com bcrypt.
-- JWT access/refresh.
-- Rate limit no backend.
-- CORS configurável.
-- Validação com Pydantic.
-- Credenciais de câmera criptografadas no backend e nunca retornadas para o frontend.
-- Toda tabela operacional possui isolamento por tenant.
+
+- Não versione arquivos `.env` nem fotos de armazenamento local.
+- Use segredos diferentes para JWT, retirada de entrega e telefonia.
+- Em produção, configure `APP_DATABASE_URL` com um papel PostgreSQL sem `SUPERUSER` e sem `BYPASSRLS`.
+- Defina `FRONTEND_URL` com a origem HTTPS exata do ambiente publicado.

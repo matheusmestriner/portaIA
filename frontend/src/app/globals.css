@@ -1,0 +1,1011 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * Paleta do Portalia. Os valores são hex (não oklch) de propósito: o
+ * white-label sobrescreve estes mesmos tokens em runtime com as cores que o
+ * tenant escolheu, e a API valida/armazena cor como hex de 6 dígitos.
+ */
+:root {
+  --background: #f5f7fa;
+  --foreground: #172033;
+  --card: #ffffff;
+  --card-foreground: #172033;
+  --popover: #ffffff;
+  --popover-foreground: #172033;
+  --primary: #0b5bd3;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2f6;
+  --secondary-foreground: #172033;
+  --muted: #f8fafc;
+  --muted-foreground: #687386;
+  --accent: #eaf2ff;
+  --accent-foreground: #0b5bd3;
+  --destructive: #c83a48;
+  --border: #e3e8ef;
+  --input: #e3e8ef;
+  --ring: #0b5bd3;
+  --success: #138a5b;
+  --warning: #ae7100;
+  --chart-1: #0b5bd3;
+  --chart-2: #16a3a5;
+  --chart-3: #138a5b;
+  --chart-4: #ae7100;
+  --chart-5: #c83a48;
+  --radius: 14px;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #172033;
+  --sidebar-primary: #0b5bd3;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eaf2ff;
+  --sidebar-accent-foreground: #0b5bd3;
+  --sidebar-border: #e3e8ef;
+  --sidebar-ring: #0b5bd3;
+}
+
+.dark {
+  --background: #0c111b;
+  --foreground: #e8edf6;
+  --card: #121925;
+  --card-foreground: #e8edf6;
+  --popover: #121925;
+  --popover-foreground: #e8edf6;
+  --primary: #5594f4;
+  --primary-foreground: #0c111b;
+  --secondary: #202a39;
+  --secondary-foreground: #e8edf6;
+  --muted: #171f2d;
+  --muted-foreground: #9ba8ba;
+  --accent: #172d4f;
+  --accent-foreground: #5594f4;
+  --destructive: #f1747e;
+  --border: #263143;
+  --input: #354157;
+  --ring: #5594f4;
+  --success: #42bd88;
+  --warning: #f1b943;
+  --chart-1: #5594f4;
+  --chart-2: #16a3a5;
+  --chart-3: #42bd88;
+  --chart-4: #f1b943;
+  --chart-5: #f1747e;
+  --sidebar: #121925;
+  --sidebar-foreground: #e8edf6;
+  --sidebar-primary: #5594f4;
+  --sidebar-primary-foreground: #0c111b;
+  --sidebar-accent: #172d4f;
+  --sidebar-accent-foreground: #5594f4;
+  --sidebar-border: #263143;
+  --sidebar-ring: #5594f4;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Fonte e tamanho vêm do white-label quando o tenant os define; sem isso,
+       caem no padrão do produto. */
+    font-family: var(--brand-font-body, var(--font-sans));
+    font-size: var(--brand-font-size, 14px);
+  }
+  html {
+    @apply font-sans;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--brand-font-heading, var(--font-sans));
+    font-weight: var(--brand-heading-weight, 600);
+  }
+}
+
+/*
+ * Shell (sidebar + topbar) portado da estrutura visual do PortariaFlow
+ * v11.56 (docs/LAYOUT_PORTARIAFLOW_PREMIUM.md do zip de referência):
+ * sidebar de vidro com gradiente escuro, indicadores circulares na nav em
+ * vez de ícones grandes, topbar com barra de ações arredondada. Adaptado
+ * para os módulos reais do Portalia — sem busca global, notificações,
+ * manual ou seletor de organização no header, que o PortariaFlow tem mas o
+ * Portalia não implementa (a regra do projeto proíbe botão decorativo sem
+ * função real por trás).
+ */
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 292px minmax(0, 1fr);
+  background: var(--background);
+}
+
+.app-sidebar {
+  position: fixed;
+  z-index: 40;
+  inset: 0 auto 0 0;
+  width: 292px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  color: #dce8fb;
+  background:
+    radial-gradient(circle at 0 0, rgba(0, 92, 171, 0.24), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--sidebar) 92%, #091321) 0%, #07101b 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 12px 0 38px rgba(4, 14, 27, 0.11);
+  transition: transform 0.22s ease;
+}
+
+:root:not(.dark) .app-sidebar {
+  color: #172033;
+  background:
+    radial-gradient(circle at 0 0, rgba(0, 92, 171, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 247, 251, 0.98) 100%);
+  border-right-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 10px 0 34px rgba(15, 23, 42, 0.05);
+}
+
+.app-sidebar__brand-card {
+  min-height: 88px;
+  padding: 13px 14px 12px;
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06)), rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 18px 42px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
+}
+
+:root:not(.dark) .app-sidebar__brand-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.5)), rgba(255, 255, 255, 0.54);
+  border-color: rgba(0, 92, 171, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.app-sidebar__brand-card small {
+  color: rgba(226, 238, 255, 0.9);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+}
+
+:root:not(.dark) .app-sidebar__brand-card small {
+  color: #344256;
+}
+
+.app-sidebar nav {
+  min-height: 0;
+  flex: 1;
+  padding: 6px 2px 12px 0;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.28) transparent;
+}
+
+.app-sidebar nav a {
+  min-height: 42px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #c9d6ee;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 550;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+:root:not(.dark) .app-sidebar nav a {
+  color: #43536a;
+}
+
+.app-sidebar nav a:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.075);
+  transform: translateX(2px);
+}
+
+:root:not(.dark) .app-sidebar nav a:hover {
+  color: #0f172a;
+  background: rgba(0, 92, 171, 0.07);
+}
+
+.app-sidebar nav a.active {
+  color: #0f172a;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.92));
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+:root:not(.dark) .app-sidebar nav a.active {
+  color: #00417e;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(231, 241, 251, 0.96));
+  border-color: rgba(0, 92, 171, 0.14);
+  box-shadow: 0 12px 28px rgba(0, 92, 171, 0.1);
+}
+
+.app-sidebar .nav-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  display: inline-block;
+  background: rgba(203, 213, 225, 0.36);
+  border-radius: 999px;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.035);
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+:root:not(.dark) .app-sidebar .nav-dot {
+  background: rgba(68, 83, 106, 0.32);
+  box-shadow: 0 0 0 5px rgba(0, 92, 171, 0.06);
+}
+
+.app-sidebar nav a:hover .nav-dot,
+.app-sidebar nav a.active .nav-dot {
+  background: #4aa3ff;
+  box-shadow: 0 0 0 5px rgba(74, 163, 255, 0.16);
+}
+
+:root:not(.dark) .app-sidebar nav a:hover .nav-dot,
+:root:not(.dark) .app-sidebar nav a.active .nav-dot {
+  background: #005cab;
+  box-shadow: 0 0 0 5px rgba(0, 92, 171, 0.14);
+}
+
+/* Grupos de navegação expansíveis (Gestão Condominial, Portaria e Acessos,
+   Segurança, Administração, Plataforma SaaS) */
+.nav-groups {
+  display: grid;
+  gap: 3px;
+}
+
+.nav-group {
+  min-width: 0;
+  display: grid;
+}
+
+.nav-group__trigger {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  color: #c9d6ee;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 13px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  text-align: left;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+}
+
+:root:not(.dark) .nav-group__trigger {
+  color: #43536a;
+}
+
+.nav-group__trigger:hover,
+.nav-group--active > .nav-group__trigger {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.045);
+}
+
+:root:not(.dark) .nav-group__trigger:hover,
+:root:not(.dark) .nav-group--active > .nav-group__trigger {
+  color: #0f3e6d;
+  background: rgba(0, 92, 171, 0.065);
+  border-color: rgba(0, 92, 171, 0.055);
+}
+
+.nav-group__icon {
+  color: #7d91ae;
+  transition: color 0.18s ease;
+}
+
+:root:not(.dark) .nav-group__icon {
+  color: #718096;
+}
+
+.nav-group__trigger:hover .nav-group__icon,
+.nav-group--active .nav-group__icon {
+  color: #62adfa;
+}
+
+:root:not(.dark) .nav-group__trigger:hover .nav-group__icon,
+:root:not(.dark) .nav-group--active .nav-group__icon {
+  color: #005cab;
+}
+
+.nav-group__trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Standalone entry (e.g. "Dashboard"): a direct link, no chevron column. */
+.nav-group__trigger--link {
+  grid-template-columns: 19px minmax(0, 1fr);
+  text-decoration: none;
+}
+
+.nav-group__chevron {
+  color: #64748b;
+  transition:
+    transform 0.2s ease,
+    color 0.18s ease;
+}
+
+.nav-group__trigger[aria-expanded="true"] .nav-group__chevron {
+  color: #9ccfff;
+  transform: rotate(180deg);
+}
+
+:root:not(.dark) .nav-group__chevron {
+  color: #7b8ba0;
+}
+
+.nav-group__children {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0.25;
+  transition:
+    grid-template-rows 0.22s ease,
+    opacity 0.18s ease;
+}
+
+.nav-group__children--open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.nav-group__children > div {
+  min-height: 0;
+  display: grid;
+  gap: 2px;
+  overflow: hidden;
+  padding-left: 13px;
+}
+
+.nav-group__children--open > div {
+  padding-top: 3px;
+  padding-bottom: 5px;
+}
+
+.app-sidebar nav .nav-group__children a {
+  min-height: 36px;
+  padding: 8px 10px 8px 14px;
+  gap: 10px;
+  border-radius: 11px;
+  font-size: 11.8px;
+  font-weight: 540;
+}
+
+.app-sidebar nav .nav-group__children a.active {
+  box-shadow: 0 9px 22px rgba(0, 0, 0, 0.16);
+}
+
+.app-sidebar__footer {
+  flex: 0 0 auto;
+  padding: 14px 13px 8px;
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:root:not(.dark) .app-sidebar__footer {
+  border-top-color: rgba(15, 23, 42, 0.09);
+}
+
+.app-sidebar__footer small {
+  color: #6f829d;
+  font-size: 10px;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+}
+
+:root:not(.dark) .app-sidebar__footer small {
+  color: #64748b;
+}
+
+/* button.<class> beats plain .app-icon-button on specificity regardless of
+   declaration order — these two only reveal themselves at the <1024px
+   breakpoint below. */
+button.app-sidebar__close,
+button.app-mobile-menu-trigger {
+  display: none;
+}
+
+.app-main {
+  grid-column: 2;
+  min-width: 0;
+  width: 100%;
+}
+
+.app-topbar {
+  position: sticky;
+  z-index: 25;
+  top: 0;
+  min-height: 88px;
+  padding: 16px 26px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--background) 95%, transparent), color-mix(in srgb, var(--background) 82%, transparent));
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.app-topbar__copy {
+  min-width: 0;
+}
+
+.app-topbar__eyebrow {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.app-topbar h1 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(21px, 2vw, 28px);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.app-premium-toolbar {
+  position: relative;
+  isolation: isolate;
+  padding: 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, transparent), color-mix(in srgb, var(--muted) 88%, transparent));
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 14px 34px rgba(15, 23, 42, 0.07);
+}
+
+.app-icon-button {
+  width: 40px;
+  height: 38px;
+  min-width: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.app-icon-button:hover {
+  transform: translateY(-1px);
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--primary) 26%, var(--border));
+}
+
+.app-user-menu {
+  min-height: 38px;
+  padding: 3px 13px 3px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--card) 95%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.app-user-menu__avatar {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--primary) 14%, transparent);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.app-user-menu__meta {
+  max-width: 152px;
+  display: grid;
+  gap: 1px;
+  line-height: 1.1;
+}
+
+.app-user-menu__meta strong {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-user-menu__meta small {
+  color: var(--muted-foreground);
+  font-size: 9px;
+}
+
+.app-logout-button {
+  min-height: 38px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.app-logout-button:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
+.app-page-content {
+  width: 100%;
+  max-width: 1540px;
+  margin: 0 auto;
+  padding: 24px 34px 56px;
+}
+
+.app-sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .app-shell {
+    display: block;
+  }
+  .app-sidebar {
+    transform: translateX(-100%);
+    box-shadow: 24px 0 60px rgba(5, 12, 24, 0.3);
+  }
+  .app-sidebar--open {
+    transform: translateX(0);
+  }
+  button.app-sidebar__close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    color: #e5eefb;
+    background: rgba(8, 22, 40, 0.72);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+  :root:not(.dark) button.app-sidebar__close {
+    color: #334155;
+    background: rgba(255, 255, 255, 0.84);
+    border-color: rgba(15, 23, 42, 0.1);
+  }
+  button.app-mobile-menu-trigger {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+  .app-sidebar-overlay {
+    position: fixed;
+    z-index: 35;
+    inset: 0;
+    display: block;
+    padding: 0;
+    background: rgba(5, 12, 24, 0.52);
+    border: 0;
+    backdrop-filter: blur(2px);
+  }
+  .app-main {
+    width: 100%;
+  }
+  .app-topbar {
+    padding-inline: 20px;
+  }
+  .app-page-content {
+    padding: 24px 22px 48px;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-topbar {
+    min-height: 76px;
+    padding: 14px;
+  }
+  .app-user-menu__meta {
+    display: none;
+  }
+  .app-page-content {
+    padding: 20px 14px 42px;
+  }
+}
+
+/*
+ * Tela de login/troca de senha, portada de styles/pages.css do PortariaFlow
+ * v11.56 (seção "Layout PortariaFlow premium"): card de vidro centralizado
+ * sobre um fundo com grade sutil e dois "orbs" decorativos. .field/.button
+ * ficam escopados dentro de .login-shell--portariaflow — são nomes
+ * genéricos demais para soltar no global sem risco de colidir com outra
+ * coisa.
+ */
+.login-shell--portariaflow {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  padding: 36px 20px;
+  display: grid;
+  grid-template-columns: 1fr;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(13, 103, 220, 0.16), transparent 34%),
+    radial-gradient(circle at 86% 82%, rgba(0, 92, 171, 0.13), transparent 33%),
+    linear-gradient(145deg, #eef4fb 0%, #f7f9fc 52%, #edf2f8 100%);
+}
+
+:root:not(.dark) .login-shell--portariaflow {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(13, 103, 220, 0.16), transparent 34%),
+    radial-gradient(circle at 86% 82%, rgba(0, 92, 171, 0.13), transparent 33%),
+    linear-gradient(145deg, #eef4fb 0%, #f7f9fc 52%, #edf2f8 100%);
+}
+
+.dark .login-shell--portariaflow {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(35, 118, 240, 0.2), transparent 34%),
+    radial-gradient(circle at 86% 82%, rgba(0, 92, 171, 0.16), transparent 33%),
+    linear-gradient(145deg, #07111f 0%, #0b1524 52%, #091321 100%);
+}
+
+.login-shell--portariaflow::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  opacity: 0.52;
+  background-image:
+    linear-gradient(rgba(15, 38, 70, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 38, 70, 0.045) 1px, transparent 1px);
+  background-size: 42px 42px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent 88%);
+}
+
+.dark .login-shell--portariaflow::before {
+  opacity: 0.32;
+  background-image:
+    linear-gradient(rgba(143, 184, 241, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 184, 241, 0.07) 1px, transparent 1px);
+}
+
+.login-orb {
+  position: absolute;
+  z-index: -1;
+  border-radius: 999px;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.login-orb--one {
+  width: 420px;
+  height: 420px;
+  top: -220px;
+  right: -90px;
+  border: 1px solid rgba(11, 91, 211, 0.15);
+  box-shadow:
+    0 0 0 70px rgba(11, 91, 211, 0.025),
+    0 0 0 140px rgba(11, 91, 211, 0.018);
+}
+
+.login-orb--two {
+  width: 300px;
+  height: 300px;
+  bottom: -180px;
+  left: -60px;
+  border: 1px solid rgba(0, 92, 171, 0.13);
+  box-shadow:
+    0 0 0 55px rgba(0, 92, 171, 0.025),
+    0 0 0 110px rgba(0, 92, 171, 0.018);
+}
+
+.login-card--standalone {
+  width: min(430px, 100%);
+  padding: 26px 28px 24px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: 24px;
+  box-shadow:
+    0 28px 80px rgba(15, 35, 64, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(22px) saturate(125%);
+  -webkit-backdrop-filter: blur(22px) saturate(125%);
+}
+
+.dark .login-card--standalone {
+  background: rgba(16, 25, 39, 0.9);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow:
+    0 32px 90px rgba(0, 0, 0, 0.44),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.login-logo-frame {
+  min-height: 76px;
+  margin-bottom: 26px;
+  padding: 14px 16px;
+  display: grid;
+  place-items: center start;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.5)), rgba(255, 255, 255, 0.52);
+  border: 1px solid rgba(0, 92, 171, 0.13);
+  border-radius: 20px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 18px 42px rgba(15, 23, 42, 0.08);
+}
+
+.dark .login-logo-frame {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.055));
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 42px rgba(0, 0, 0, 0.22);
+}
+
+.login-heading {
+  margin-bottom: 24px;
+}
+
+.login-secure-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 13px;
+  padding: 7px 10px;
+  color: var(--primary);
+  background: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.login-heading h1 {
+  margin-bottom: 8px;
+  color: var(--foreground);
+  font-size: 27px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.login-heading p {
+  max-width: 390px;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.login-card--standalone form {
+  display: grid;
+  gap: 17px;
+}
+
+.login-field {
+  display: grid;
+  gap: 7px;
+  color: var(--foreground);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.login-field input {
+  width: 100%;
+  height: 41px;
+  padding: 0 12px;
+  color: var(--foreground);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: none;
+  font-size: 12.5px;
+  font-weight: 400;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.login-field input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.login-field input[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+
+.login-field > small {
+  color: var(--destructive);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.login-password-field {
+  position: relative;
+}
+
+.login-password-field input {
+  padding-right: 44px;
+}
+
+.login-password-field button {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 40px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.login-form-error {
+  padding: 10px 12px;
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--destructive) 20%, transparent);
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.login-submit-button {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--primary);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--primary) 22%, transparent);
+  transition: background 0.16s ease, transform 0.16s ease, opacity 0.16s ease;
+}
+
+.login-submit-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--primary) 85%, black);
+}
+
+.login-submit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.login-card--standalone > footer {
+  margin-top: 26px;
+  padding-top: 18px;
+  color: color-mix(in srgb, var(--muted-foreground) 90%, transparent);
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .login-shell--portariaflow {
+    padding: 18px 12px;
+  }
+  .login-card--standalone {
+    padding: 20px 18px;
+    border-radius: 20px;
+  }
+  .login-logo-frame {
+    min-height: 70px;
+    margin-bottom: 22px;
+    padding: 12px;
+    border-radius: 17px;
+  }
+  .login-heading h1 {
+    font-size: 24px;
+  }
+}
